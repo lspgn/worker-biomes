@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta property="og:title" content="Minecraft Biome Map Generator" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="{{publish_address}}" />
+    <!--<meta property="og:image" content="{{publish_address}}/map.png?seed={{seed}}" />-->
+    {OGIMAGETEMPLATE}
+    <meta property="og:description" content="A biome map generator using WASM and Cloudflare Workers" />
+    <title>Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js" integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew==" crossorigin=""></script>
+</head>
+<style>
+    body {
+        font-family: Helvetica, Arial;
+        margin: 20px;
+    }
+
+    #map {
+        height: 800px;
+        width: 800px;
+        margin: 20px;
+    }
+
+    .leaflet-layer-image {
+        image-rendering: crisp-edges;
+    }
+</style>
+
+<body>
+
+    <h1>Minecraft Biome Map</h1>
+
+    <p>A biome map generator using <a href="https://workers.cloudflare.com/">Cloudflare Workers</a> and WASM.</p>
+    <p>Check out the <a href="https://github.com/lspgn/worker-biomes">source on GitHub</a>.</p>
+
+    <!--<label>Seed: <input type="text" id="seed" value="{{seed}}" /></label>
+    <label>X: <input type="text" id="longitude" value="0" /></label>
+    <label>Z: <input type="text" id="latitude" value="0" /></label>-->
+    {INPUTTEMPLATE}
+
+    <div id="map"></div>
+
+
+    <script type="application/javascript">
+        const TILE_SIZE = 512;
+        const TILE_SIZE_PIXELS = 128; // number of pixels in an image
+        const TILE_COORD_SIZE = 256; // size of a tile in latlng distance
+        const CHUNK_SIZE = 16; // number of blocks per pixel
+
+        let map;
+
+        function updateUrl(seed, lat, lng) {
+            let refresh = window.location.protocol + "//" + window.location.host + window.location.pathname + '?seed=' + seed + '&x=' + lng + '&z=' + lat;
+            window.history.pushState({
+                path: refresh
+            }, '', refresh);
+        }
+
+        function updateUrlSeed(seed) {
+            let lat = parseInt(document.getElementById("latitude").value);
+            let lng = parseInt(document.getElementById("longitude").value);
+            updateUrl(seed, lat, lng)
+        }
+
+        function initMap(seed) {
+            if (map != undefined) {
+                map.remove();
+            }
+            let lat = parseInt(document.getElementById("latitude").value) * TILE_COORD_SIZE / (CHUNK_SIZE * TILE_SIZE_PIXELS);
+            let lng = parseInt(document.getElementById("longitude").value) * TILE_COORD_SIZE / (CHUNK_SIZE * TILE_SIZE_PIXELS);
+            map = L.map('map', {
+                center: [lat, lng],
+                zoom: 1,
+                zoomControl: false,
+                minZoom: 1,
+                maxZoom: 1,
+                crs: L.CRS.Simple,
+            });
+
+            map.addEventListener("mousemove", function(evt) {
+                document.getElementById("latitude").value = Math.round(evt.latlng.lat * CHUNK_SIZE * TILE_SIZE_PIXELS / TILE_COORD_SIZE);
+                document.getElementById("longitude").value = Math.round(evt.latlng.lng * CHUNK_SIZE * TILE_SIZE_PIXELS / TILE_COORD_SIZE);
+            });
+            map.addEventListener("move", function(evt) {
+                let center = evt.target.getCenter();
+                let lat = Math.round(center.lat * CHUNK_SIZE * TILE_SIZE_PIXELS / TILE_COORD_SIZE);
+                let lng = Math.round(center.lng * CHUNK_SIZE * TILE_SIZE_PIXELS / TILE_COORD_SIZE);
+                let seed = document.getElementById("seed").value;
+                updateUrl(seed, lat, lng);
+            });
+            L.tileLayer(
+                //'https://example.com/map.png?seed=' + seed + '&x={x}&z={y}', {
+                '{{publish_address}}/map.png?seed=' + seed + '&x={x}&z={y}', {
+                    noWrap: false,
+                    tileSize: TILE_SIZE,
+                }
+            ).addTo(map);
+        }
+
+        function changeSeed(value) {
+            updateUrlSeed(value);
+            initMap(value);
+        }
+
+        changeSeed(document.getElementById("seed").value, true);
+        document.getElementById("seed").addEventListener("change", function(evt) {
+            changeSeed(evt.target.value);
+        });
+
+        function updateCenter(evt) {
+            let lat = parseInt(document.getElementById("latitude").value) * TILE_COORD_SIZE / (CHUNK_SIZE * TILE_SIZE_PIXELS);
+            let lon = parseInt(document.getElementById("longitude").value) * TILE_COORD_SIZE / (CHUNK_SIZE * TILE_SIZE_PIXELS);
+
+            map.setView(L.latLng(lat, lon));
+        }
+
+        document.getElementById("latitude").addEventListener("change", updateCenter);
+        document.getElementById("longitude").addEventListener("change", updateCenter);
+    </script>
+</body>
+
+</html>
